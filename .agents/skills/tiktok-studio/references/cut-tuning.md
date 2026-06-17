@@ -33,6 +33,7 @@ Read the FULL transcript text before cutting. This creator dictates his own edit
 | `MAX_WORD_TAIL` | 0.90 | **0.60** | cap each word's effective end — trims trailing murmur/whisper |
 | `OUT_OVERRIDES` | `{}` | — | `{last_word_start: hard_src_out}` for stubborn tails |
 | `CUT_KILL` | `[]` | — | cut-timeline `(start,end)` ranges to excise post-assembly |
+| `IN_EXTEND` | `{}` | — | `{first_word_start: extra_lead_sec}` — pull a segment IN earlier into the preceding silence so a hard-onset name (xAI, OpenAI) isn't eaten by the 12ms fade-in |
 
 With accurate ElevenLabs word-ends, **set in `config.py`**: `MAX_GAP=0.40`, `PRE_PAD=0.04`,
 `POST_PAD=0.06`, `MAX_WORD_TAIL=0.60`.
@@ -55,6 +56,17 @@ It MUST be **0**. If it flags any, it lists them with cut-timeline timestamps �
 offending SEGS block at the pause. **Never present or render a cut whose audit is non-zero.**
 This catches the "too many silences" failure; the `MAX_GAP` valley (above) catches the opposite
 "choppy / kind of cut" failure. Check BOTH every time.
+
+### The word-gap audit has a BLIND SPOT — the RMS audit (after `--cut`) catches it
+The gap audit trusts transcript timestamps, but Scribe routinely tags a word's **start** ~0.8s
+*before* its real onset right after a long pause (a held "Eeees", "¿Túuu") — so ~1s of silence
+hides **inside** that word's span and the gap audit sees a 0.1s gap. The user hears it as a
+"small stop". So `build_cut.py --cut` also runs an **RMS silence audit** on the rendered cut and
+prints any near-silent run `> 0.5s` with its position. Treat a non-zero RMS audit like a
+non-zero gap audit: fix it. Fix = add the run to `CUT_KILL` (dropping the held silent word is
+fine — it's inaudible anyway). **Gotcha:** the RMS audit prints **post-kill** positions but
+`CUT_KILL` is read in the **pre-kill** timeline — when adding a 2nd/3rd range, add back the
+seconds removed by earlier ranges that precede it (or re-derive all ranges in one no-kill pass).
 
 ## Whisper hunt (energy analysis)
 

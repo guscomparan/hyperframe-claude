@@ -20,10 +20,10 @@ thing**, fed to `nano-banana-edit` as an `image_urls` reference so it stays fait
 - **Real brand** → download the real logo, upload to Kie, `nano-banana-edit` → cartoon die-cut
   sticker (faithful shape/colors/lettering). Plain downloaded logos read as "stock"; blind
   `nano-banana` guesses go off-model — **both were rejected by the user.**
-- **Real, named person** → fetch the photo (Wikimedia `Special:FilePath/<Name>.jpg?width=600`
-  or official press) and `nano-banana-edit` it into a **cartoon caricature that keeps the
-  likeness**, framed as a rounded card / circle. (Bare-photo via `scripts/make_avatar.py` still
-  works, but the channel's current style is cartoon-from-photo.)
+- **Real, named person** → a **REAL photo, NOT a cartoon** (SKILL.md Hard Rule 10). Fetch a
+  portrait (Wikimedia `Special:FilePath/<Name>.jpg?width=600`, or via the Commons API
+  `generator=search` with a descriptive User-Agent — `Mozilla/5.0` gets 429'd) and frame it as a
+  circle with `scripts/make_avatar.py` (white sticker ring). Do not cartoonize a named individual.
 - **Country** → download the real flag, `nano-banana-edit` → cute cartoon waving flag.
 - **Concept / action / analogy** → minimal cartoon **scene, 1–3 characters** (`nano-banana`).
 
@@ -56,10 +56,18 @@ flags/seals/SVGs: `commons.wikimedia.org/w/api.php?action=query&titles=File:<F>&
 Kie's fetcher can't pull Wikimedia directly. Download locally, upload, then edit:
 
 ```
-ref sources:
-  Wikimedia  https://commons.wikimedia.org/wiki/Special:FilePath/<File>.svg?width=600
-  GitHub org https://github.com/<Org>.png?size=600     # official logo when not on Commons
+ref sources (PREFER Wikimedia — verify the ref by EYE before generating):
+  Wikimedia  commons API ...&titles=File:<Brand>_logo.svg&prop=imageinfo&iiprop=url&iiurlwidth=600
+             -> imageinfo[0].thumburl is a rasterized PNG (Special:FilePath returns raw SVG)
+  GitHub org https://github.com/<Org>.png?size=600     # ONLY if you've confirmed it's the logo
 ```
+
+**Verify every ref before spending a generation.** GitHub org avatars are often NOT the brand
+logo (`getcursor.png` is an unrelated blue ghost; `anysphere.png` is a scenic photo). Cursor's
+real logo is `File:Cursor logo.svg` on Commons. **Abstract monogram marks** (xAI's `𝕏`) make
+nano-banana invent garbage lettering ("SARK") — add *"reproduce the exact shape; do NOT add any
+letters, words or text"* to the prompt. If a brand has no clean logo, reuse a related one (e.g.
+Anysphere → the Cursor logo, since it owns Cursor).
 
 ```json
 { "model": "google/nano-banana-edit",

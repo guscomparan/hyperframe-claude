@@ -28,6 +28,10 @@ SEGS = cfg.SEGS
 MENTIONS = getattr(cfg, "MENTIONS", [])
 OUT_OVERRIDES = getattr(cfg, "OUT_OVERRIDES", {})
 CUT_KILL = getattr(cfg, "CUT_KILL", [])
+# {first_word_start: extra_lead_seconds} — pull a segment's IN-point earlier into the preceding
+# silence so a hard-onset word (e.g. "xAI" after a long pause) gets a clean lead-in and isn't
+# eaten by the 12ms fade-in. Keyed by the word's source start.
+IN_EXTEND = getattr(cfg, "IN_EXTEND", {})
 if not SEGS:
     raise SystemExit(f"videos/{NAME}/config.py: SEGS is empty — fill it from the transcript "
                      "(see the tiktok-studio skill, references/cut-tuning.md).")
@@ -102,7 +106,8 @@ for first, last in SEGS:
     for a, b in zip(inside, inside[1:]):
         if b["start"] - eff_end(a) > MAX_GAP:
             edl.append((sub_start, eff_end(a) + POST_PAD))
-            sub_start = b["start"] - PRE_PAD
+            lead = next((v for k, v in IN_EXTEND.items() if abs(k - b["start"]) < 0.05), 0)
+            sub_start = max(b["start"] - PRE_PAD - lead, eff_end(a) + POST_PAD + 0.02)
     edl.append((sub_start, t_out))
 
 edl = apply_kills(edl, CUT_KILL)
@@ -173,3 +178,32 @@ cmd = [FFMPEG, "-y", "-i", SRC, "-filter_complex", ";".join(fc), "-map", "[vout]
 print(f"[{NAME}] cutting (HLG->SDR tone-map) -> {OUT} ...")
 subprocess.run(cmd, check=True, capture_output=True)
 print("wrote", OUT)
+
+# --- RMS SILENCE AUDIT (catches dead air the word-gap audit can't see) -----------------------
+# The word-gap audit trusts transcript timestamps, but Scribe often tags a word's START well
+# before its real onset after a pause (a held "Eeees" / "¿Túuu"), hiding ~1s of silence INSIDE
+# the word's span. Decode the rendered cut's audio and flag any near-silent run > 0.5s — those
+# are real "stops" to remove with CUT_KILL (in CUT-timeline seconds).
+import struct, math
+raw_audio = subprocess.run([FFMPEG, "-v", "error", "-i", OUT, "-ac", "1", "-ar", "8000",
+                            "-f", "f32le", "-"], capture_output=True).stdout
+s = struct.unpack("<%df" % (len(raw_audio) // 4), raw_audio)
+sr, win = 8000, int(8000 * 0.05)
+env = [math.sqrt(sum(v * v for v in s[i:i + win]) / win) for i in range(0, len(s) - win, win)]
+TH, MINLEN = 0.02, int(0.5 / 0.05)
+runs, i = [], 0
+while i < len(env):
+    if env[i] < TH:
+        j = i
+        while j < len(env) and env[j] < TH:
+            j += 1
+        if j - i >= MINLEN:
+            runs.append((i * 0.05, j * 0.05, (j - i) * 0.05))
+        i = j
+    else:
+        i += 1
+print(f"[{NAME}] RMS silence audit: {len(runs)} dead-air run(s) > 0.5s in the cut")
+if runs:
+    print(f"[{NAME}] ⚠ DEAD AIR — trim with CUT_KILL = [(start,end), ...] (cut-timeline seconds):")
+    for a, b, d in runs:
+        print(f"       {a:6.2f} - {b:6.2f}  ({d:.2f}s)")

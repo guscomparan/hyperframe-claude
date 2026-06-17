@@ -36,8 +36,12 @@ mv "$SRC" "$BASE/source.MOV"
 # proper nouns + tags silences as audio_events). Whisper is NOT used: it mangles brand names.
 # See scripts/transcribe_elevenlabs.py and references/cut-tuning.md.
 SCRIBE="$(dirname "$0")/../.claude/skills/tiktok-studio/scripts/transcribe_elevenlabs.py"
-declare -A L3=( [es]=spa [en]=eng [pt]=por [pt-br]=por [fr]=fra [de]=deu [it]=ita )
-SLANG="${L3[$LANG_CODE]:-$LANG_CODE}"
+# macOS ships bash 3.2 (no associative arrays) — use a case for the ISO-639-1 -> 639-3 map.
+case "$LANG_CODE" in
+  es) SLANG=spa ;; en) SLANG=eng ;; pt|pt-br) SLANG=por ;;
+  fr) SLANG=fra ;; de) SLANG=deu ;; it) SLANG=ita ;;
+  *) SLANG="$LANG_CODE" ;;
+esac
 [ -f "$SCRIBE" ] || { echo "ERROR: $SCRIBE missing."; exit 1; }
 grep -q ELEVENLABS_API_KEY .env 2>/dev/null || { echo "ERROR: ELEVENLABS_API_KEY missing from .env (required — Scribe is the only transcriber)."; exit 1; }
 echo "[new] transcribing (ElevenLabs Scribe, $SLANG)..."

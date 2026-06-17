@@ -5,6 +5,7 @@ TITLE = "TÍTULO DEL VIDEO"   # glass title card text (also editable at render v
 ACCENT = "#487d00"           # karaoke highlight color
 FOLLOW_HANDLE = "@tuusuario"  # your @handle for the SÍGUEME / follow CTA scene
 # FOLLOW_AVATAR = "assets/stickers/gustavo-avatar.png"  # swap in your own avatar (regen from your photo)
+FOLLOW_AVATAR_RIGHT = False   # True = avatar circle on the right side (handle+button stay centered)
 
 # Music: a file under music/ (root-relative path). Default = the shared track.
 # Drop more tracks into music/ and point MUSIC at one. Set MUSIC = "" for no music.
@@ -38,4 +39,11 @@ CAPTION_FIXES = {
 
 # Optional fine-tuning (leave empty unless needed):
 OUT_OVERRIDES = {}   # {last_word_start: hard_src_out}  — trim a stubborn trailing tail
-CUT_KILL = []        # [(cut_start, cut_end)]  — RMS-verified whisper/dead-air windows to cut
+# [(cut_start, cut_end)] dead-air windows to cut — TAKE THESE FROM build_cut's RMS SILENCE AUDIT
+# (it catches silence the word-gap audit can't: Scribe tags held "Eeees"/"¿Túuu" ~0.8s before the
+# real onset). NB: CUT_KILL is in the PRE-kill timeline; the audit prints POST-kill positions, so
+# when you add a 2nd/3rd range, add back the seconds removed by earlier ranges that precede it.
+CUT_KILL = []
+# {first_word_start: extra_lead_sec} — pull a segment's IN-point earlier into the preceding silence
+# so a hard-onset name after a long pause (e.g. "xAI", "OpenAI") isn't clipped by the fade-in.
+IN_EXTEND = {}

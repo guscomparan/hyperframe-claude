@@ -27,6 +27,9 @@ MUSIC_VOL = round(10 ** (MUSIC_DB / 20), 3)
 # Follow/CTA scene — your channel branding (set per video in config.py).
 FOLLOW_HANDLE = getattr(cfg, "FOLLOW_HANDLE", "@tuusuario")
 FOLLOW_AVATAR = getattr(cfg, "FOLLOW_AVATAR", "assets/stickers/gustavo-avatar.png")
+# Opt-in per video: place the avatar circle on the RIGHT side of the frame (handle + SÍGUEME
+# button stay centered) instead of stacked-centered above them.
+FOLLOW_AVATAR_RIGHT = getattr(cfg, "FOLLOW_AVATAR_RIGHT", False)
 
 # Caption text corrections: whisper mishears brand names (Cloth->Claude, Dipsick->DeepSeek,
 # Antropi->Anthropic, Ysi->Y si). Map is {lowercased-alpha-core: replacement}; punctuation kept.
@@ -109,7 +112,7 @@ def stk_geom(brand):
     return width, height, top
 
 FOLLOW_HTML = (
-    '      <div class="clip stk follow-scene" id="stk-{i}" '
+    '      <div class="clip stk follow-scene{favcls}" id="stk-{i}" '
     'style="width:560px;margin-left:-280px;top:1080px" '
     'data-start="{start}" data-duration="{dur}" data-track-index="2">\n'
     '        <img class="fav" src="{avatar}" alt="" />\n'
@@ -120,7 +123,8 @@ FOLLOW_HTML = (
 def sticker_html(i, s):
     if s["brand"] == "follow":
         return FOLLOW_HTML.format(i=i, start=s["start"], dur=s["dur"],
-                                  avatar=FOLLOW_AVATAR, handle=FOLLOW_HANDLE)
+                                  avatar=FOLLOW_AVATAR, handle=FOLLOW_HANDLE,
+                                  favcls=" fav-right" if FOLLOW_AVATAR_RIGHT else "")
     w, h, top = stk_geom(s["brand"])
     # explicit width AND height (+ object-fit in CSS) so the renderer can't stretch via height:auto
     return (f'      <img class="clip stk" id="stk-{i}" src="videos/{NAME}/stickers/{s["brand"]}.png" '
@@ -157,6 +161,9 @@ HTML = """<!DOCTYPE html>
       /* follow scene: avatar + handle + button stacked, centered */
       .follow-scene { display: flex; flex-direction: column; align-items: center; gap: 22px; }
       .follow-scene .fav { width: 230px; height: 230px; }
+      /* avatar pulled out to the RIGHT side of the frame (handle + button stay centered) */
+      .follow-scene.fav-right { min-height: 300px; justify-content: center; }
+      .follow-scene.fav-right .fav { position: absolute; left: 540px; top: 0; }
       .follow-scene .fhandle {
         font-weight: 800; font-size: 50px; color: #fff; letter-spacing: 0.5px;
         background: rgba(8,8,10,0.9); padding: 10px 26px; border-radius: 16px;
@@ -173,11 +180,14 @@ HTML = """<!DOCTYPE html>
         width: 56px; height: 56px; border-radius: 50%; background: #fff; color: #ef4444;
         font-size: 52px; line-height: 1; padding-bottom: 6px;
       }
-      /* title: centered in the band between the top of frame and the hairline (measured
-         per video → __HAIRLINE__px here; do NOT hardcode across videos) */
+      /* title: sits in the band between the top of frame and the hairline (measured per video →
+         __HAIRLINE__px here; do NOT hardcode across videos). Biased toward the LOWER part of the
+         band (padding-top below) so it nestles just above the head — a centered-in-[0,hairline]
+         card reads as top-heavy because people perceive "where my hair starts" as the forehead
+         hairline, not the top of the curls. */
       #title-card {
         position: absolute; top: 0; left: 0; right: 0; height: __HAIRLINE__px; z-index: 7;
-        display: flex; align-items: center; justify-content: center; padding: 0 70px;
+        display: flex; align-items: center; justify-content: center; padding: __TITLE_PADTOP__px 70px 0;
       }
       #title-card .card {
         display: inline-block; color: #ffffff;
@@ -221,7 +231,7 @@ HTML = """<!DOCTYPE html>
       </div>
       <audio id="base-audio" class="clip" src="videos/__NAME__/cut.mp4" data-start="0" data-duration="__TOTAL__" data-track-index="1" data-volume="1"></audio>
 __MUSIC_AUDIO__
-      <audio id="sfx-camera" class="clip" src="assets/sfx/camera.mp3" data-start="0.05" data-duration="0.35" data-track-index="5" data-volume="0.7"></audio>
+      <audio id="sfx-camera" class="clip" src="assets/sfx/camera.mp3" data-start="0.05" data-duration="0.35" data-track-index="7" data-volume="0.7"></audio>
 __SFX_AUDIO__
 __STICKER_IMGS__
       <div id="captions" class="clip" data-start="0" data-duration="__TOTAL__" data-track-index="3"></div>
@@ -349,6 +359,7 @@ out = (HTML
        .replace("__ACCENT__", ACCENT)
        .replace("__TOTAL__", str(TOTAL))
        .replace("__HAIRLINE__", str(HAIRLINE))
+       .replace("__TITLE_PADTOP__", str(round(0.16 * HAIRLINE)))
        .replace("__MUSIC_AUDIO__", music_audio)
        .replace("__STICKER_IMGS__", sticker_imgs)
        .replace("__GROUPS_JSON__", json.dumps(cap_groups, ensure_ascii=False))

@@ -16,11 +16,26 @@ if len(sys.argv) < 3:
     raise SystemExit("usage: transcribe_elevenlabs.py <source> <out_dir> [lang=spa]")
 SRC, OUT_DIR = sys.argv[1], sys.argv[2]
 LANG = sys.argv[3] if len(sys.argv) > 3 else "spa"
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-KEY = next((l.split("=", 1)[1].strip() for l in open(os.path.join(ROOT, ".env"))
-            if l.startswith("ELEVENLABS_API_KEY")), None)
+# Find the repo-root .env by walking up from cwd and from this script (the `.claude/skills`
+# symlink makes a fixed dirname-count fragile, so search instead). Env var wins if set.
+def _find_env():
+    seen = set()
+    for start in (os.getcwd(), os.path.dirname(os.path.abspath(__file__))):
+        d = start
+        while d and d not in seen:
+            seen.add(d)
+            cand = os.path.join(d, ".env")
+            if os.path.isfile(cand):
+                return cand
+            d = os.path.dirname(d)
+    return None
+KEY = os.environ.get("ELEVENLABS_API_KEY")
+ENV = _find_env()
+if not KEY and ENV:
+    KEY = next((l.split("=", 1)[1].strip() for l in open(ENV)
+                if l.startswith("ELEVENLABS_API_KEY")), None)
 if not KEY:
-    raise SystemExit("ELEVENLABS_API_KEY missing from .env")
+    raise SystemExit("ELEVENLABS_API_KEY missing from .env (or env var)")
 
 # Extract a small mono 16k mp3 (the MOV is huge; Scribe only needs audio).
 audio = SRC

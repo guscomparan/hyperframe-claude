@@ -69,8 +69,10 @@ are **never** altered — everything is overlay, timing, and audio on top of the
    faithful (shape, colors, lettering, likeness). Plain downloaded logos read as "stock" and a
    blind `nano-banana` generation goes off-model — both got rejected. Scenes are allowed when a
    moment is an action/analogy: keep them to **1–3 cartoon characters**, same flat die-cut
-   style. So: real brand → cartoon redraw of its logo; real person → cartoon of their photo;
-   country → cartoon waving flag from the real flag; concept → minimal cartoon scene.
+   style. So: real brand → cartoon redraw of its logo; country → cartoon waving flag from the
+   real flag; concept → minimal cartoon scene. **Exception — a real, NAMED person is the one
+   thing you do NOT cartoonize:** use a REAL photo framed in a ring (`scripts/make_avatar.py`),
+   never a caricature.
 
 ## Pipeline overview — per-video subfolders + helper scripts
 
