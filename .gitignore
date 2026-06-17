@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# OS / editor caches (auto-rebuilt)
+.DS_Store
+.thumbnails/
+.waveform-cache/
+
+# Drop zone + per-video working folders (large / regenerated; finish.sh deletes them)
+inbox/*
+!inbox/.gitkeep
+videos/*
+!videos/.gitkeep
+
+# Generated avatar (rebuilt from gustavo.jpeg by scripts/make_avatar.py)
+assets/stickers/gustavo-avatar.png
+
+# Secrets — NEVER commit
+.env
+.env.*
+!.env.example
+
+# Raw source videos / renders (huge; live in inbox/ + videos/ which are already ignored)
+*.MOV
+*.mov
+*.mp4
+*.MP4
+
+# HyperFrames working cache
+.hyperframes/

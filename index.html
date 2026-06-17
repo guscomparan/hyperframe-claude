@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #0a0b0e; }
+      #main { position: relative; width: 1080px; height: 1920px; font-family: "Outfit", sans-serif; }
+      #note {
+        position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+        text-align: center; color: #ffffff; font-weight: 800; font-size: 52px;
+        line-height: 1.35; padding: 0 130px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="main" data-composition-id="main" data-start="0" data-duration="5" data-width="1080" data-height="1920">
+      <div id="note" class="clip" data-start="0" data-duration="5" data-track-index="0">
+        Plantilla lista. Usa el skill /tiktok-studio para editar un video.
+      </div>
+      <script>
+        window.__timelines = window.__timelines || {};
+        var tl = gsap.timeline({ paused: true });
+        tl.from("#note", { opacity: 0, y: 30, duration: 0.6, ease: "power3.out" }, 0.1);
+        window.__timelines["main"] = tl;
+      </script>
+    </div>
+  </body>
+</html>
