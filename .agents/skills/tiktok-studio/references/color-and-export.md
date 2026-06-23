@@ -51,17 +51,20 @@ ffprobe -v error -select_streams v:0 -show_entries \
    automatically (no `--sdr` needed).
 3. **Deliver Rec.709 (1-1-1), 2-pass H.264**, matching the user's Final Cut spec:
    - MP4 ("Computer"), `+faststart`; H.264 **High**, **2-pass** ("Multi-pass / Better");
-     1080×1920; 8-bit `yuv420p`
-   - Color: `colorprim=bt709:transfer=bt709:colormatrix=bt709`, `color_range tv`
-   - **60 fps** (source is 60fps; cut + render at 60); Audio **AAC 48 kHz stereo**
+     **2160×3840 (4K vertical)**; 8-bit `yuv420p`
+   - Color: `colorprim=bt709:transfer=bt709:colormatrix=bt709`, `color_range tv` (resolution is
+     orthogonal to color — the tone-map runs identically at 4K)
+   - **4K60**: `build_cut.py` scales the cut to 2160×3840; `export.sh` renders the 1080×1920
+     composition at 2× DPR via `--resolution portrait-4k`. Audio **AAC 48 kHz stereo**
 
 One correctly-tone-mapped Rec.709 file is the universal master for **YouTube, TikTok,
 Instagram, Facebook**.
 
 ## One-command export
 
-`edit/export.sh [name] [bitrate]` renders the (already-SDR) cut at 60fps, then 2-pass-encodes
-the Rec.709 master and prints the tags. Defaults: `distillation-tiktok`, `16M`.
+`edit/export.sh [name] [bitrate]` renders the (already-SDR) cut at 4K60 (`--resolution
+portrait-4k`), then 2-pass-encodes the Rec.709 master and prints the tags. Default bitrate `40M`
+(4K60 needs it; 16M looked mushy).
 
 ```bash
 edit/export.sh                 # -> renders/distillation-tiktok_REC709.mp4
@@ -70,8 +73,9 @@ edit/export.sh my-video 10M
 
 ## QC (mandatory)
 
-- `ffprobe` the master: `color_primaries/transfer/space=bt709`, `pix_fmt=yuv420p`,
-  `r_frame_rate=60/1`, audio `aac/48000/2`, no mastering-display/CLL/Dolby side-data.
+- `ffprobe` the master: **`width=2160 height=3840`**, `color_primaries/transfer/space=bt709`,
+  `pix_fmt=yuv420p`, `r_frame_rate=60/1`, audio `aac/48000/2`, no mastering-display/CLL/Dolby
+  side-data.
 - Extract frames and **look**: skin natural, greens vivid, window highlights controlled —
   **not dark/shadowed, not flat/gray**. Compare against how the HDR source looks tone-mapped by
   QuickTime (that OS tone-map is the target appearance).
