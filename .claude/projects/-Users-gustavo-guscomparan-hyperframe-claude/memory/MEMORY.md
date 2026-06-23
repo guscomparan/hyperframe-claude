@@ -1,0 +1,3 @@
+- [Follow handle](follow-handle.md) — always use @guscomparan in CTA cards (not committed)
+- [Karaoke accent](karaoke-accent.md) — always green #487d00; never switch per video
+- [Shirt branding](shirt-branding.md) — "sappiai.com" on his shirt is his brand, not a watermark; ignore it

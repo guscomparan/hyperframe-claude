@@ -2,7 +2,7 @@
 # See the tiktok-studio skill: references/cut-tuning.md + references/sticker-pipeline.md.
 
 TITLE = "TÍTULO DEL VIDEO"   # glass title card text (also editable at render via --variables)
-ACCENT = "#487d00"           # karaoke highlight color
+ACCENT = "#487d00"           # karaoke highlight block color (square block behind the active word)
 FOLLOW_HANDLE = "@tuusuario"  # your @handle for the SÍGUEME / follow CTA scene
 # FOLLOW_AVATAR = "assets/stickers/gustavo-avatar.png"  # swap in your own avatar (regen from your photo)
 FOLLOW_AVATAR_RIGHT = False   # True = avatar circle on the right side (handle+button stay centered)
@@ -10,7 +10,15 @@ FOLLOW_AVATAR_RIGHT = False   # True = avatar circle on the right side (handle+b
 # Music: a file under music/ (root-relative path). Default = the shared track.
 # Drop more tracks into music/ and point MUSIC at one. Set MUSIC = "" for no music.
 MUSIC = "music/background-music.mp3"
-MUSIC_DB = -12               # music level in dB (-12 default; lower = quieter)
+MUSIC_DB = -15               # music bed level in dB (-15 default; lower = quieter)
+
+# Sticker spread guard (Hard Rule 9) — at most STICKER_MAX images, >= STICKER_MIN_GAP apart.
+# The min-gap is WAIVED for enumerations (back-to-back stickers tighter than STICKER_ENUM_GAP =
+# naming several companies/people/examples in a row). build_comp.py prints an audit; override here
+# only if this video legitimately needs different thresholds.
+# STICKER_MAX = 15
+# STICKER_MIN_GAP = 5.0
+# STICKER_ENUM_GAP = 2.0
 
 # Silence removal — TIGHT defaults (no pause/silence should survive). Loosen only if choppy.
 PRE_PAD = 0.04

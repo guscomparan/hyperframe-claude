@@ -47,7 +47,9 @@ flags/seals/SVGs: `commons.wikimedia.org/w/api.php?action=query&titles=File:<F>&
   - Send `User-Agent: Mozilla/5.0` on **every** call and download the result with
     `curl -A "Mozilla/5.0"` — the result CDN 403s the default Python urllib UA.
   - File upload host is `https://kieai.redpandaai.co/api/file-base64-upload`
-    (the `api.kie.ai/api/file-base64-upload` path 404s). Body:
+    (the `api.kie.ai/api/file-base64-upload` path 404s). **Send the `Authorization: Bearer
+    $KIEAI_API_KEY` header here too** — without it the host 401s
+    ("Missing Authorization header or invalid API_KEY format"). Body:
     `{"base64Data":"data:image/png;base64,...","uploadPath":"images/refs","fileName":"x.png"}`
     → use `data.downloadUrl` (expires ~3 days).
 

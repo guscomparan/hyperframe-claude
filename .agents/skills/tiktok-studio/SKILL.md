@@ -25,7 +25,7 @@ are **never** altered — everything is overlay, timing, and audio on top of the
    language** (detect from the transcript — Spanish for the current project). Present them
    and let the user pick or tweak before the final render. The title is an editable
    composition variable, so changing it later costs nothing.
-2. **Never crop, zoom, or reframe the person.** Keep the original 1080×1920 frame and the
+2. **Never crop, zoom, or reframe the person.** Keep the original 9:16 frame and the
    face exactly as shot. Overlays go in the margins (title above the head, images/captions at
    chest height).
 3. **Cut quality first — this is where you fail most, so be paranoid.** (a) **Transcribe with
@@ -61,8 +61,13 @@ are **never** altered — everything is overlay, timing, and audio on top of the
    regenerate every image from THAT transcript's mentions — do not reuse `claude.png`,
    `money-big.png`, etc. just because they exist. Reused, off-topic images are the #1 quality
    failure. If a brand/object recurs across videos, still re-generate (or deliberately re-map)
-   it for the new context. **Use plenty of images — aim for ~20 per video** (a mix of company
-   logos and concept/situation scenes); not sparse. Captions must still fit in the gaps.
+   it for the new context. **Use a measured number of images — at most 15 per video** (a mix of
+   company logos and concept/situation scenes), **spread across the runtime with ≥5 s between
+   sticker moments**. The 5 s spacing is WAIVED only for **enumerations** — naming several
+   companies/people/examples in a row, each warranting its own sticker back-to-back.
+   `build_comp.py` prints a **sticker audit** (count + sub-5 s-gap warnings, auto-allowing tight
+   enumeration runs <2 s apart); **relay any flagged inconsistency to the user before
+   rendering**, exactly like the silence audit. Captions must still fit in the gaps.
 10. **Every image is a CARTOON, but grounded in the REAL thing as a reference — never blind,
    never the plain logo.** Download the real asset first (brand logo, person's photo, flag,
    emblem) and feed it to `google/nano-banana-edit` as `image_urls` so the cartoon stays
@@ -91,7 +96,7 @@ write into that subfolder. **Preview is free; the slow render is only the final 
 6. upload it, then  edit/finish.sh <name>   →  delete everything for that video (manual)
 ```
 
-`edit/build.sh` = `build_cut.py <name> --cut` → `detect_hairline.py <name>` → `build_comp.py <name>`.
+`edit/build.sh` = `build_cut.py <name> --cut` → `detect_head_bounds.py <name>` → `build_comp.py <name>`.
 Shared/reused across videos (not per-video): `assets/sfx/`, `music/` (drop tracks here),
 `assets/stickers/gustavo.jpeg` + `gustavo-avatar.png`. Never hand-edit `index.html` (regenerated).
 
@@ -115,9 +120,11 @@ In `videos/<name>/config.py` (read by `build_cut.py <name>`) — **set the TIGHT
 - **Gaze audit**: extract a face crop every ~0.35s per segment (`crop=1000:1000:580:850`) and
   drop any sub-range where the speaker looks away (remove from `SEGS` or add a `CUT_KILL`).
 
-Joints use 12ms audio fades to avoid clicks. Output is 1080×1920 **@60fps**, CRF 18, and the
-HDR source is **tone-mapped HLG→SDR Rec.709 here** (needs a zscale ffmpeg — see
-color-and-export.md). Run `python3 edit/build_cut.py <name>` (dry run, prints stats) then
+Joints use 12ms audio fades to avoid clicks. Output is **2160×3840 (4K vertical) @60fps**, CRF
+18, and the HDR source is **tone-mapped HLG→SDR Rec.709 here** (needs a zscale ffmpeg — see
+color-and-export.md; the tone-map is resolution-independent, so 4K is identical color to the old
+1080p path). iPhone HDR sources are 4K so this is a passthrough scale; `build_cut.py` warns if a
+source is smaller (it would be a fake upscale). Run `python3 edit/build_cut.py <name>` (dry run, prints stats) then
 `--cut` — or just `edit/build.sh <name>` for cut+hairline+index in one go.
 
 See [references/cut-tuning.md](references/cut-tuning.md) for the exact knobs and the
@@ -146,7 +153,13 @@ Image kinds:
 
 Place images **centered at chest height (y≈1400)**, adaptive size (explicit `width`+`height`,
 `object-fit:contain` — never `height:auto`, the renderer stretches it), never over the face.
-Each pop plays the **pop-click** SFX on the exact frame.
+**An image must NEVER touch or block the head — not the hair (top) nor the chin (bottom).**
+`build_comp.py` floors every sticker's TOP edge below `chin.txt` (the per-video chin floor from
+`detect_head_bounds.py`), shrinking a too-tall image to fit between the chin and the frame
+bottom, and the pop grows from the bottom (`transform-origin:50% 100%`) so the overshoot can't
+rise into the chin. Re-run `detect_head_bounds.py` per video and **verify on a frame that no
+sticker reaches the chin** (raise `chin.txt` by eye if needed). Each pop plays the **pop-click**
+SFX on the exact frame.
 
 Style prompt, Kie endpoints, the 403/User-Agent workaround, the upload host, and background
 keying (corner flood-fill, not u2net — preserves the white sticker border) are in
@@ -161,17 +174,20 @@ keying (corner flood-fill, not u2net — preserves the white sticker border) are
   old 88px). Editable via the `title` composition variable.
   - **Vertical position is dynamic — measured per video, never hardcoded.** The card is
     centered in the band between the top of frame (y=0) and **where the hair starts**. Run
-    `python3 edit/detect_hairline.py [cut.mp4]` → writes `edit/hairline.txt` (an int Y);
-    `build_comp.py` reads it and sets `#title-card { height: <hairline>px }`. Re-run it for
-    every video (different framing = different hairline) and **verify on a rendered frame that
-    the card never touches the hair**. If detection looks off, set `edit/hairline.txt` by eye
+    `python3 edit/detect_head_bounds.py <name>` → writes `videos/<name>/hairline.txt` (top of
+    hair) **and** `videos/<name>/chin.txt` (a safe floor below the chin — see Stickers);
+    `build_comp.py` reads hairline and sets `#title-card { height: <hairline>px }`. Re-run it for
+    every video (different framing = different bounds) and **verify on a rendered frame that
+    the card never touches the hair**. If detection looks off, set the txt files by eye
     from an extracted frame.
 - **Captions**: karaoke, chest zone, **mutually exclusive with stickers** (drop/trim any
-  caption window that overlaps a sticker window + small guard). Current house style is
-  **inverted**: no background box, black-filled letters with a 5px white outline
-  (`-webkit-text-stroke` + `paint-order: stroke fill`); the active word is **green
-  (`#487d00`) fill, white outline**, set as the `accent` variable. (Earlier style was a black
-  pill with white text — both live in git history.)
+  caption window that overlaps a sticker window + small guard). Current house style:
+  **white-filled letters with a 5px black outline** (`-webkit-text-stroke` +
+  `paint-order: stroke fill`), no container box. The active (karaoke) word gets a **square
+  accent-colored block behind it** (`#487d00` green default, set as the `accent` variable) —
+  **transient**: only the currently-spoken word is lit, clearing as the next word activates.
+  (Earlier styles — black fill + white outline w/ green active fill, and a black pill with
+  white text — live in git history.)
 - **Intro**: 1.3s zoom-out + fade-in on a non-timed `#intro-wrap` around the video; **camera
   shutter** SFX at 0.05s.
 - **Stickers**: scale-pop in (`back.out(1.7)`), pop-click SFX, auto-truncate before the next
@@ -180,7 +196,7 @@ keying (corner flood-fill, not u2net — preserves the white sticker border) are
   white sticker ring) + `@handle` + a **CSS** SÍGUEME button (build the button in CSS, not as
   an AI sticker — AI sticker "paper" leaves an un-keyable white box).
 - **Audio**: separate `<audio>` for the video's own track (volume 1) + a **music bed at
-  −12 dB** (`volume = 10^(-12/20) ≈ 0.251`), full length, hard-cut at the end. SFX on their
+  −15 dB** (`volume = 10^(-15/20) ≈ 0.178`), full length, hard-cut at the end. SFX on their
   own track.
 
 `TOTAL` is read from `edit/edl.json` so it always matches the cut.
@@ -193,7 +209,7 @@ keying (corner flood-fill, not u2net — preserves the white sticker border) are
   candidates so the user picks by ear. Categories: golf, camera, pop, whoosh. Paste any
   `assets.mixkit.co/active_storage/sfx/<id>/<id>-preview.mp3` to add one.
 - Music: drop tracks into `music/`; pick per video in `config.py` (`MUSIC = "music/track.mp3"`,
-  default `music/background-music.mp3`, `""` = none) and `MUSIC_DB` (default -12). If quiet
+  default `music/background-music.mp3`, `""` = none) and `MUSIC_DB` (**default -15**). If quiet
   lines get buried, lower `MUSIC_DB` or offer speech-ducking.
 
 ## Step 5 — Build, PREVIEW, then export, QC
@@ -202,22 +218,23 @@ keying (corner flood-fill, not u2net — preserves the white sticker border) are
 (fast) then scrub the live preview; only export once it's approved.
 
 ```bash
-edit/build.sh <name>     # build_cut --cut + detect_hairline + build_comp  (FAST, no full render)
+edit/build.sh <name>     # build_cut --cut + detect_head_bounds + build_comp  (FAST, no full render)
 npm run check            # lint + validate + inspect — must pass
 npm run dev              # preview: open videos/<name>/index.html in the studio (localhost:3002)
 # iterate: edit videos/<name>/config.py or stickers → edit/build.sh <name> → refresh preview
 edit/export.sh <name>    # ONLY once approved — render @60fps + 2-pass Rec.709 master (SLOW)
 ```
 `export.sh` writes `videos/<name>/<name>_REC709.mp4` — the single universal **Rec.709 (1-1-1),
-H.264 High, 60fps, AAC 48kHz** master. The HLG→SDR tone-map already happened in `build_cut.py`
+H.264 High, 4K (2160×3840) 60fps, AAC 48kHz** master (renders the 1080×1920 composition at 2× DPR
+via `--resolution portrait-4k`; default bitrate 40M). The HLG→SDR tone-map already happened in `build_cut.py`
 (zscale + `hable`); see [references/color-and-export.md](references/color-and-export.md) (Chrome
 `--sdr` alone washed out — don't use it as the tone-map).
 
 QC the exported master: extract frames at the title, a caption-only beat, several sticker
 beats, and the CTA, and **look at them**. Verify: face never covered; captions legible over
 shirt and dark areas; glass title shows video through it; no caption under any sticker; **color
-natural — not dark, not gray**. `ffprobe` must show `bt709` primaries/transfer/space,
-`yuv420p`, `60/1`, `aac/48000/2`.
+natural — not dark, not gray**. `ffprobe` must show **`2160×3840`**, `bt709`
+primaries/transfer/space, `yuv420p`, `60/1`, `aac/48000/2`.
 
 **Change the title without editing code:** `edit TITLE in videos/<name>/config.py`, or at
 render: `npx hyperframes render -c videos/<name>/index.html --variables '{"title":"NUEVO"}' --fps 60 -o videos/<name>/out.mp4`

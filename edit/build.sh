@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a video's composition for PREVIEW (no full render): cut + hairline + index.html.
+# Build a video's composition for PREVIEW (no full render): cut + head bounds + index.html.
 # Usage: edit/build.sh <name>
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -9,8 +9,8 @@ BASE="videos/$NAME"
 
 echo "[build] cut (HLG->SDR tone-map, 60fps)..."
 python3 edit/build_cut.py "$NAME" --cut
-echo "[build] hairline (title position)..."
-python3 edit/detect_hairline.py "$NAME"
+echo "[build] head bounds (hairline + chin floor)..."
+python3 edit/detect_head_bounds.py "$NAME"
 echo "[build] index.html..."
 python3 edit/build_comp.py "$NAME"
 echo

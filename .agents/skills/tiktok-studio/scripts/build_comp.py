@@ -22,7 +22,7 @@ TITLE = getattr(cfg, "TITLE", "TÍTULO DEL VIDEO")
 ACCENT = getattr(cfg, "ACCENT", "#487d00")
 # Music: root-relative path (default = the shared track). Set MUSIC = "" / None for no music.
 MUSIC = getattr(cfg, "MUSIC", "music/background-music.mp3")
-MUSIC_DB = getattr(cfg, "MUSIC_DB", -12)
+MUSIC_DB = getattr(cfg, "MUSIC_DB", -15)
 MUSIC_VOL = round(10 ** (MUSIC_DB / 20), 3)
 # Follow/CTA scene — your channel branding (set per video in config.py).
 FOLLOW_HANDLE = getattr(cfg, "FOLLOW_HANDLE", "@tuusuario")
@@ -40,11 +40,17 @@ def fix_word(t):
     rep = CAPTION_FIXES.get(core.lower())
     return f"{pre}{rep}{post}" if rep else t
 
-# Title band bottom = where the hair starts (measured per video by detect_hairline.py).
+# Title band bottom = where the hair starts (measured per video by detect_head_bounds.py).
 try:
     HAIRLINE = int(open(os.path.join(BASE, "hairline.txt")).read().strip())
 except Exception:
     HAIRLINE = 500
+# Sticker top FLOOR = a safe Y below the chin (measured per video by detect_head_bounds.py). Every
+# overlay's top edge stays below this so images never touch/block the head. Fallback = legacy 1120.
+try:
+    CHIN = int(open(os.path.join(BASE, "chin.txt")).read().strip())
+except Exception:
+    CHIN = 1120
 
 # ---- sticker events: pop on mention, truncate before the next mention ----
 stickers = []
@@ -54,6 +60,37 @@ for i, m in enumerate(mentions):
     if i + 1 < len(mentions):
         dur = min(dur, max(mentions[i + 1]["time"] - 0.12 - start - 0.06, 0.6))
     stickers.append({"brand": m["brand"], "start": round(start, 3), "dur": round(dur, 3)})
+
+# ---- follow/CTA scene: house format ALWAYS ends on it. Auto-append a "follow" card over the
+# last few seconds unless config already placed one via a (src, "follow") mention. (Without this
+# the avatar + @handle + SÍGUEME button never render — there is no other code that adds it.) ----
+FOLLOW_DUR = 3.5
+if not any(s["brand"] == "follow" for s in stickers):
+    f_start = max(TOTAL - FOLLOW_DUR,
+                  (stickers[-1]["start"] + stickers[-1]["dur"] + 0.1) if stickers else 0.0)
+    stickers.append({"brand": "follow", "start": round(f_start, 3),
+                     "dur": round(max(TOTAL - f_start, 0.6), 3)})
+
+# ---- sticker spread audit (Hard Rule 9): at most STICKER_MAX, >= STICKER_MIN_GAP apart ----
+# The min-gap is WAIVED for enumerations — back-to-back stickers tighter than STICKER_ENUM_GAP
+# are treated as an intentional list (naming several companies/people/examples in a row).
+# Warnings are printed at the end so they can be relayed to the user, like the silence audit.
+STICKER_MAX = getattr(cfg, "STICKER_MAX", 15)
+STICKER_MIN_GAP = getattr(cfg, "STICKER_MIN_GAP", 5.0)
+STICKER_ENUM_GAP = getattr(cfg, "STICKER_ENUM_GAP", 2.0)
+content_stk = [s for s in stickers if s["brand"] != "follow"]  # the CTA/follow card is exempt
+sticker_warnings = []
+if len(content_stk) > STICKER_MAX:
+    sticker_warnings.append(
+        f"{len(content_stk)} stickers exceed the max of {STICKER_MAX} — drop the "
+        f"{len(content_stk) - STICKER_MAX} weakest (keep them spread across the video).")
+for a, b in zip(content_stk, content_stk[1:]):
+    gap = b["start"] - a["start"]
+    if STICKER_ENUM_GAP <= gap < STICKER_MIN_GAP:
+        sticker_warnings.append(
+            f"gap {gap:.1f}s between '{a['brand']}' (t={a['start']:.1f}s) and '{b['brand']}' "
+            f"(t={b['start']:.1f}s) is <{STICKER_MIN_GAP:.0f}s and not a tight enumeration "
+            f"(<{STICKER_ENUM_GAP:.0f}s) — spread them out, or confirm it's an intentional list.")
 
 # sticker on-screen windows (with small guard) — captions must not coexist with these
 GUARD = 0.05
@@ -103,17 +140,26 @@ for gi, g in enumerate(groups):
     })
 
 from PIL import Image
+FRAME_BOTTOM_PAD = 40  # keep stickers off the very bottom edge
 def stk_geom(brand):
     w, h = Image.open(os.path.join(BASE, f"stickers/{brand}.png")).size
     ar = w / h
     width = max(320, min(720, int((202500 * ar) ** 0.5)))  # ~450x450 visual area
     height = int(width / ar)
-    top = max(1120, 1400 - height // 2)  # center the sticker at chest height (y~1400)
+    # The sticker TOP must stay below CHIN (the per-video chin floor) so it never touches the
+    # head. If a tall sticker wouldn't fit between CHIN and the frame bottom, shrink it (keep AR).
+    avail = (1920 - FRAME_BOTTOM_PAD) - CHIN
+    if height > avail:
+        height = avail
+        width = int(height * ar)
+    top = max(CHIN, 1400 - height // 2)  # below the chin; otherwise centered at chest (y~1400)
+    if top + height > 1920 - FRAME_BOTTOM_PAD:
+        top = 1920 - FRAME_BOTTOM_PAD - height
     return width, height, top
 
 FOLLOW_HTML = (
     '      <div class="clip stk follow-scene{favcls}" id="stk-{i}" '
-    'style="width:560px;margin-left:-280px;top:1080px" '
+    'style="width:560px;margin-left:-280px;top:{chin}px" '
     'data-start="{start}" data-duration="{dur}" data-track-index="2">\n'
     '        <img class="fav" src="{avatar}" alt="" />\n'
     '        <div class="fhandle">{handle}</div>\n'
@@ -122,7 +168,7 @@ FOLLOW_HTML = (
 
 def sticker_html(i, s):
     if s["brand"] == "follow":
-        return FOLLOW_HTML.format(i=i, start=s["start"], dur=s["dur"],
+        return FOLLOW_HTML.format(i=i, start=s["start"], dur=s["dur"], chin=CHIN,
                                   avatar=FOLLOW_AVATAR, handle=FOLLOW_HANDLE,
                                   favcls=" fav-right" if FOLLOW_AVATAR_RIGHT else "")
     w, h, top = stk_geom(s["brand"])
@@ -155,7 +201,9 @@ HTML = """<!DOCTYPE html>
       #base-video { position: absolute; inset: 0; width: 1080px; height: 1920px; object-fit: cover; }
       .stk {
         position: absolute; left: 50%; object-fit: contain;
-        z-index: 5; transform: scale(0); transform-origin: 50% 50%;
+        /* grow from the BOTTOM so the back.out pop overshoot never extends the top edge upward
+           into the chin/head — the top only ever reaches its resting (below-chin) position. */
+        z-index: 5; transform: scale(0); transform-origin: 50% 100%;
         filter: drop-shadow(0 14px 30px rgba(0, 0, 0, 0.45));
       }
       /* follow scene: avatar + handle + button stacked, centered */
@@ -194,6 +242,7 @@ HTML = """<!DOCTYPE html>
         font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
         line-height: 1.12; padding: 22px 36px; border-radius: 0;
         max-width: 880px; font-size: 66px; text-align: center;
+        white-space: pre-line;   /* honor an explicit "\n" in a two-line TITLE */
         /* liquid-glass: DARK translucent fill + backdrop blur + faint rim (kept dark, not gray) */
         background: rgba(3, 4, 7, 0.46);
         border: 1.5px solid rgba(255, 255, 255, 0.12);
@@ -202,7 +251,7 @@ HTML = """<!DOCTYPE html>
         box-shadow: 0 10px 34px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.14);
         text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
       }
-      /* captions: black pill in the chest zone (same place as stickers); centered at y~1400 */
+      /* captions: chest zone (same place as stickers); centered at y~1400 */
       #captions {
         position: absolute; left: 0; right: 0; top: 1180px; height: 440px; z-index: 6;
         display: flex; align-items: center; justify-content: center;
@@ -213,13 +262,15 @@ HTML = """<!DOCTYPE html>
         opacity: 0; visibility: hidden;
         font-weight: 800; line-height: 1.16; text-transform: uppercase; letter-spacing: 0.5px;
       }
-      /* inverted captions: no background box, black-filled letters with a white outline */
+      /* captions: no container box; white-filled letters with a black outline. The active
+         (karaoke) word gets a square accent-colored BLOCK behind it (set per-word in JS). */
       .cgroup .cbg {
         display: inline-block; max-width: 920px; text-align: center;
       }
       .cgroup .w {
-        display: inline-block; transform-origin: 50% 60%; padding: 0 4px;
-        color: #000000; -webkit-text-stroke: 5px #ffffff; paint-order: stroke fill;
+        display: inline-block; transform-origin: 50% 60%; padding: 2px 10px;
+        color: #ffffff; -webkit-text-stroke: 5px #000000; paint-order: stroke fill;
+        background-color: transparent; border-radius: 0;   /* square block when highlighted */
         text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
       }
     </style>
@@ -262,7 +313,7 @@ __STICKER_IMGS__
           titleEl.style.fontSize = tFont + "px";
         }
 
-        // Build caption DOM synchronously (black pill wraps the words)
+        // Build caption DOM synchronously (white words; active word gets an accent block)
         var capRoot = document.getElementById("captions");
         GROUPS.forEach(function (g, gi) {
           var div = document.createElement("div");
@@ -322,9 +373,11 @@ __STICKER_IMGS__
             var ws = "#w-" + gi + "-" + wi;
             var hot = Math.max(w.s, g.start + 0.02);
             if (hot >= g.end) return;    // word falls outside the visible window
-            tl.set(ws, { color: ACCENT, scale: 1.05 }, hot);   // active: green fill, white outline (CSS)
+            // active: square accent-colored block appears behind the white word (transient —
+            // only the current word is lit; it clears as the next word activates)
+            tl.set(ws, { backgroundColor: ACCENT, scale: 1.05 }, hot);
             var revert = wi < g.words.length - 1 ? g.words[wi + 1].s : Math.min(w.e + 0.08, g.end - 0.1);
-            tl.set(ws, { color: "#000000", scale: 1 }, Math.min(Math.max(revert, hot + 0.05), g.end - 0.02));
+            tl.set(ws, { backgroundColor: "transparent", scale: 1 }, Math.min(Math.max(revert, hot + 0.05), g.end - 0.02));
           });
           tl.to(el, { opacity: 0, scale: 0.95, duration: 0.12, ease: "power2.in" }, g.end - 0.12);
           tl.set(el, { opacity: 0, visibility: "hidden" }, g.end);
@@ -355,7 +408,11 @@ music_audio = (f'      <audio id="bg-music" class="clip" src="{MUSIC}" data-star
 
 out = (HTML
        .replace("__NAME__", NAME)
-       .replace("__TITLE__", TITLE)
+       # Escape the title so a multi-line title (TITLE with "\n") stays valid in BOTH the
+       # data-composition-variables JSON attribute AND the inline `var titleText="..."` JS.
+       # json.dumps()[1:-1] yields \n / \" escapes (no outer quotes); CSS white-space:pre-line
+       # on the card turns the runtime newline into a real second line.
+       .replace("__TITLE__", json.dumps(TITLE)[1:-1])
        .replace("__ACCENT__", ACCENT)
        .replace("__TOTAL__", str(TOTAL))
        .replace("__HAIRLINE__", str(HAIRLINE))
@@ -368,3 +425,12 @@ out = (HTML
 open(os.path.join(BASE, "index.html"), "w").write(out)
 print(f"[{NAME}] index.html: {len(cap_groups)} caption groups, {len(stickers)} stickers, "
       f"title {TITLE!r}, music {MUSIC or 'none'} ({MUSIC_DB}dB), hairline {HAIRLINE}, total {TOTAL}s")
+
+# Sticker spread audit — relay any of these to the user before render (like the silence audit).
+if sticker_warnings:
+    print(f"[{NAME}] STICKER AUDIT — review before render ({len(sticker_warnings)} flag(s)):")
+    for w in sticker_warnings:
+        print(f"  - {w}")
+else:
+    print(f"[{NAME}] sticker audit: OK ({len(content_stk)} stickers, "
+          f"max {STICKER_MAX}, all >= {STICKER_MIN_GAP:.0f}s apart or enumerations)")

@@ -158,7 +158,20 @@ if flagged:
 if "--cut" not in sys.argv:
     sys.exit(0)
 
-# ffmpeg: per-segment trim, HLG->SDR tone-map, scale 1080x1920@60, 12ms audio fades
+# Output is 4K vertical (2160x3840) @60fps. iPhone HDR sources are 4K, so this is a passthrough
+# scale (no real upscale); the tone-map chain below is resolution-independent so color is
+# identical to the old 1080p path. Warn if a source is smaller (would be a fake upscale).
+probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                        "stream=width,height", "-of", "csv=p=0:s=x", SRC],
+                       capture_output=True, text=True).stdout.strip()
+try:
+    sw, sh = (int(x) for x in probe.split("x")[:2])
+    if max(sw, sh) < 3840:
+        print(f"[{NAME}] ⚠ source is {sw}x{sh} (<4K) — the 2160x3840 cut will UPSCALE (not true 4K).")
+except Exception:
+    pass
+
+# ffmpeg: per-segment trim, HLG->SDR tone-map, scale 2160x3840@60, 12ms audio fades
 fc, vlabels, alabels = [], [], []
 for i, (t_in, t_out) in enumerate(edl):
     dur = t_out - t_in
@@ -167,7 +180,7 @@ for i, (t_in, t_out) in enumerate(edl):
               f"afade=t=in:d=0.012,afade=t=out:st={max(dur-0.012,0):.3f}:d=0.012[a{i}]")
     vlabels.append(f"[v{i}]"); alabels.append(f"[a{i}]")
 fc.append("".join(f"{v}{a}" for v, a in zip(vlabels, alabels)) + f"concat=n={len(edl)}:v=1:a=1[vc][ac]")
-fc.append(f"[vc]{TONEMAP},scale=1080:1920:flags=lanczos,fps=60[vout]")
+fc.append(f"[vc]{TONEMAP},scale=2160:3840:flags=lanczos,fps=60[vout]")
 if "zscale" not in subprocess.run([FFMPEG, "-hide_banner", "-filters"], capture_output=True, text=True).stdout:
     raise SystemExit(f"{FFMPEG} lacks zscale — install a tone-map ffmpeg to ~/.local/bin/ffmpeg-tonemap "
                      "(see the tiktok-studio skill, references/color-and-export.md).")

@@ -1,24 +1,27 @@
 #!/usr/bin/env bash
-# Final delivery: render videos/<name>/index.html @60fps, then 2-pass H.264 Rec.709 master.
+# Final delivery: render videos/<name>/index.html @4K60, then 2-pass H.264 Rec.709 master.
 # Run only AFTER you've previewed and approved (this is the slow step).
-# Usage: edit/export.sh <name> [bitrate]   (default bitrate 16M)
+# Usage: edit/export.sh <name> [bitrate]   (default bitrate 40M for 4K60)
 #
+# Resolution: the composition is authored at 1080x1920; --resolution portrait-4k makes Chrome
+# render it at 2x DPR -> 2160x3840 (no coordinate changes). The cut.mp4 base video is already 4K
+# (build_cut.py scales to 2160x3840), so footage stays sharp.
 # Color: the HLG->SDR tone-map already happened in build_cut.py (zscale+hable), so the cut is
 # SDR Rec.709 and this just 2-pass-encodes tagged Rec.709 (1-1-1), yuv420p, 60fps, AAC 48kHz.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 NAME="${1:?usage: edit/export.sh <name> [bitrate]}"
-BITRATE="${2:-16M}"
+BITRATE="${2:-40M}"
 BASE="videos/$NAME"
 [ -f "$BASE/index.html" ] || { echo "no $BASE/index.html — run edit/build.sh $NAME first."; exit 1; }
 SDR="$BASE/render_sdr.mp4"
 OUT="$BASE/${NAME}_REC709.mp4"
 
-echo "[1/3] Rendering @60fps (cut is already SDR Rec.709)..."
-npx --yes hyperframes@0.6.88 render -c "$BASE/index.html" --quiet --fps 60 -o "$SDR"
+echo "[1/3] Rendering @4K60 (2160x3840, cut is already SDR Rec.709)..."
+npx --yes hyperframes@0.6.88 render -c "$BASE/index.html" --quiet --fps 60 --resolution portrait-4k -o "$SDR"
 
-echo "[2/3] 2-pass H.264 delivery encode (Rec.709 1-1-1, ${BITRATE}, 60fps, AAC 48k)..."
+echo "[2/3] 2-pass H.264 delivery encode (Rec.709 1-1-1, ${BITRATE}, 4K60, AAC 48k)..."
 PASSLOG="$(mktemp -t x264pass)"
 VF="format=yuv420p"
 COLOR=(-colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv)
